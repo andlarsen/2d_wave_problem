@@ -1,45 +1,62 @@
-# The program Heat_1D solves the 1D heat equation with the forward difference 
-# method (the explicit method).
-
+import imageio
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
+from boundary import setup_boundary_conditions
+from solver import solver
 
-# Solves the 1D unsteady-state heat equation using the forward difference method
-# The heat equation in terms of u = u(x,t) is given as        
-#                                u   = u                      
-#                                 t     xx                    
-# For this example:                                           
-#   Initial conditions           u(x,0) = f(x) = sin(PI x)    
-#   Boundary conditions          u(0,t) = u(1,t) = 0          
-#                                                             
-# The coordinate x belongs to the interval: 0 <= x <= 1       
-# The time t belongs to the interval      : 0 <= t <= tEnd                                                   
+frames = []  # list to store each frame as an image
 
-n = int(input('Number of points in the x- and y-direction: '))
-m = n
-#m = input('Number of points in the y-direction, m: ');
+# Initialize arrays 
+n, m = 50, 50
+r = 0.1
+h = 1.0 / (n - 1)
+k = r * h**2
+nTimeSteps = 200
+g = 0.5
 
-r = float(input('Enter the ratio r (has to be smaller than 1/2), r*: '))
-h = 1.0/(float(n)-1)
-k = np.sqrt(r*h**2)
+u = np.zeros((n, m))
+u_k = np.zeros((n, m))
+u_k_minus = np.zeros((n, m))
+u_k = setup_boundary_conditions(n, m, u_k)
 
-# Initialize the matrix u containing u(i,j) to 0.0
-if r < 0.0 or r > 1/2:
-  print('r = %d, i.e. the algorithm is unstable!', r)
-  print('You have to reduce the time step size or increase the coordinate step size')
-  exit()
+u_min = -1.0
+u_max = 1.0
 
-nTimeSteps = int(input('Enter the number of time steps, nTimeSteps: '))
-g = float(input('Initial velocity, g: '))
+# Time-stepping loop
+for iteration in range(1, nTimeSteps + 1):
+    u_k, u_k_minus = solver(n, m, u, u_k, u_k_minus, nTimeSteps, r, h, k, g, iteration)
+    
+    # Save frame
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    X, Y = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, m))
+    surf = ax.plot_surface(X, Y, u_k, cmap='viridis', alpha=0.8)
+    ax.set_title(f'Time Step: {iteration} of {nTimeSteps}')
+    
+    # Set consistent viewing angle and limits for better animation
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('u(x,y,t)')
+    ax.view_init(elev=30, azim=45)  # Set viewing angle
+    
+    # Optional: set consistent z-limits if you know the range
+    ax.set_zlim([u_min, u_max])  # uncomment and set appropriate values
+    
+    # Ensure the figure is rendered before extracting image data
+    fig.canvas.draw()
+    
+    # Convert figure to image array
+    image = np.frombuffer(fig.canvas.buffer_rgba(), dtype='uint8')
+    image = image.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+    # Convert RGBA to RGB by removing alpha channel
+    image = image[:, :, :3]
+    frames.append(image)
+    
+    # Close figure after extracting image data
+    plt.close(fig)
 
-# Initializes the matrices
-u = np.zeros((n,m))
-u_k = np.zeros((n,m))
-u_k_minus = np.zeros((n,m))
-
-# Sets up the initial boundary conditions
-#u_k(1:n,1:m) = Wave_2D_BCs(n, m, u_k)
-
-# Solves the equations and plots the result on a contour plot
-#u = Wave_2D_Solver(n, m, u, u_k, u_k_minus, nTimeSteps, r, h, k, g)
-
+# Save the GIF after all frames are collected
+imageio.mimsave('2d_wave_simulation.gif', frames, fps=10)
+print("Saved GIF as 2d_wave_simulation.gif")
